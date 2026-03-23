@@ -1,3 +1,4 @@
+
 # app.py — Complete Sentiment Analysis Web App
 import streamlit as st
 import pandas as pd
@@ -5,6 +6,12 @@ import matplotlib.pyplot as plt
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from textblob import TextBlob
 from datetime import datetime
+import nltk
+nltk.download('punkt', quiet=True)
+nltk.download('stopwords', quiet=True)
+
+
+
 
 # ── Page Setup ──────────────────────────────
 st.set_page_config(
