@@ -32,6 +32,16 @@ def load_model():
 
 analyzer = load_model()
 
+TEXT_COLUMN_CANDIDATES = (
+    "text",
+    "tweet",
+    "full_text",
+    "tweet_text",
+    "content",
+    "body",
+    "message",
+)
+
 # ── Analyze Function ────────────────────────
 def analyze(text):
     scores   = analyzer.polarity_scores(text)
@@ -44,6 +54,44 @@ def analyze(text):
     else:                   sentiment = "NEUTRAL"
 
     return sentiment, combined, scores, tb
+
+
+def find_text_column(columns):
+    normalized = {str(column).strip().lower(): column for column in columns}
+    for candidate in TEXT_COLUMN_CANDIDATES:
+        if candidate in normalized:
+            return normalized[candidate]
+    return None
+
+
+def read_csv_texts(uploaded_file):
+    df = pd.read_csv(uploaded_file)
+    text_column = find_text_column(df.columns)
+    if text_column is None:
+        accepted = ", ".join(TEXT_COLUMN_CANDIDATES)
+        raise ValueError(f"CSV must include one text column: {accepted}")
+
+    texts = []
+    for value in df[text_column].dropna():
+        text = str(value).strip()
+        if text:
+            texts.append(text)
+    return texts, str(text_column)
+
+
+def build_results(lines):
+    results = []
+    for line in lines:
+        sentiment, combined, scores, tb = analyze(line)
+        results.append({
+            "Text":       line[:60] + ("..." if len(line) > 60 else ""),
+            "Sentiment":  sentiment,
+            "Score":      round(combined, 3),
+            "Positive %": f"{scores['pos']*100:.1f}%",
+            "Negative %": f"{scores['neg']*100:.1f}%",
+            "Neutral %":  f"{scores['neu']*100:.1f}%",
+        })
+    return results
 
 # ════════════════════════════════════════════
 # TAB 1 — Single Text
@@ -116,22 +164,24 @@ with tab2:
         height      = 200,
     )
 
+    uploaded_csv = st.file_uploader(
+        "Or upload a CSV with a text, tweet, full_text, tweet_text, content, body, or message column:",
+        type=["csv"],
+    )
+
     if st.button("🔍 Analyze All", type="primary"):
         lines = [l.strip() for l in bulk_text.strip().split("\n") if l.strip()]
 
-        if lines:
-            results = []
-            for line in lines:
-                sentiment, combined, scores, tb = analyze(line)
-                results.append({
-                    "Text":       line[:60] + ("..." if len(line) > 60 else ""),
-                    "Sentiment":  sentiment,
-                    "Score":      round(combined, 3),
-                    "Positive %": f"{scores['pos']*100:.1f}%",
-                    "Negative %": f"{scores['neg']*100:.1f}%",
-                    "Neutral %":  f"{scores['neu']*100:.1f}%",
-                })
+        if uploaded_csv is not None:
+            try:
+                csv_lines, text_column = read_csv_texts(uploaded_csv)
+                lines.extend(csv_lines)
+                st.info(f"Loaded {len(csv_lines)} rows from CSV column: {text_column}")
+            except Exception as exc:
+                st.error(f"Could not read CSV: {exc}")
 
+        if lines:
+            results = build_results(lines)
             df = pd.DataFrame(results)
 
             # Color the sentiment column
